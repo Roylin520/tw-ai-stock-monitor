@@ -30,6 +30,9 @@ import telegram_notify
 
 LOG_PATH = os.path.join(config.OUTPUT_DIR, "hourly_log.csv")
 LIVE_PATH = os.path.join(config.OUTPUT_DIR, "live.html")
+# GitHub Pages 發佈目錄（手機版儀表板）
+PUBLIC_DIR = "public"
+PUBLIC_PATH = os.path.join(PUBLIC_DIR, "index.html")
 
 
 def run_once(force=False):
@@ -71,8 +74,9 @@ def run_once(force=False):
 
     _append_log(rows)
     _write_live(rows, ts, status)
+    _write_dashboard(rows, ts, status)
     _notify_summary(rows, ts)
-    print(f"  完成，已更新 {LIVE_PATH}")
+    print(f"  完成，已更新 {LIVE_PATH} 與 {PUBLIC_PATH}")
 
 
 def _append_log(rows):
@@ -146,6 +150,78 @@ td.sig{{text-align:left;color:#666;font-size:12px}}
 </div></body></html>"""
     os.makedirs(config.OUTPUT_DIR, exist_ok=True)
     with open(LIVE_PATH, "w", encoding="utf-8") as f:
+        f.write(html)
+
+
+def _write_dashboard(rows, ts, status):
+    """產生手機版儀表板 public/index.html（卡片式，響應式）。"""
+    valid = sorted(rows, key=lambda x: (x["up_prob"] or 0), reverse=True)
+
+    cards = ""
+    for r in valid:
+        p = r["up_prob"]
+        pcolor = _prob_color(p)
+        chg_color = "#e74c3c" if r["pct"] >= 0 else "#27ae60"
+        acc = f"{r['test_acc']:.0f}%" if r["test_acc"] is not None else "—"
+        rel = "" if r["reliable"] else "<span class='warn'>樣本不足</span>"
+        width = p if p is not None else 0
+        sig = r["signals"] or "—"
+        cards += f"""
+      <div class="card">
+        <div class="row1">
+          <div class="name">{r['name']} <span class="tk">{r['ticker']}</span></div>
+          <div class="price">{r['close']} <span style="color:{chg_color}">{r['pct']:+.2f}%</span></div>
+        </div>
+        <div class="prob">
+          <span class="plabel">隔日收紅機率</span>
+          <span class="pval" style="color:{pcolor}">{p if p is not None else '—'}%</span>
+          <span class="acc">回測命中 {acc} {rel}</span>
+        </div>
+        <div class="barwrap"><div class="bar" style="width:{width}%;background:{pcolor}"></div></div>
+        <div class="sig">{sig}</div>
+      </div>"""
+
+    html = f"""<!DOCTYPE html><html lang="zh-Hant"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta http-equiv="refresh" content="300">
+<title>台股 AI 盤中監控</title>
+<style>
+  * {{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }}
+  body {{ font-family:-apple-system,"Microsoft JhengHei",sans-serif; margin:0;
+          background:#0f1115; color:#e8eaed; padding:14px 12px 40px; }}
+  header {{ position:sticky; top:0; background:#0f1115; padding:6px 2px 12px; z-index:10; }}
+  h1 {{ font-size:19px; margin:0 0 2px; }}
+  .meta {{ color:#8a8f98; font-size:12px; }}
+  .card {{ background:#1a1d24; border-radius:14px; padding:13px 15px; margin:11px 0;
+           box-shadow:0 1px 3px rgba(0,0,0,.4); }}
+  .row1 {{ display:flex; justify-content:space-between; align-items:baseline; }}
+  .name {{ font-size:17px; font-weight:600; }}
+  .tk {{ color:#7d828b; font-size:12px; font-weight:400; }}
+  .price {{ font-size:15px; font-variant-numeric:tabular-nums; }}
+  .prob {{ display:flex; align-items:baseline; gap:8px; margin:9px 0 6px; flex-wrap:wrap; }}
+  .plabel {{ font-size:12px; color:#8a8f98; }}
+  .pval {{ font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; }}
+  .acc {{ font-size:11px; color:#8a8f98; margin-left:auto; }}
+  .warn {{ color:#e0a800; }}
+  .barwrap {{ height:7px; background:#2a2e37; border-radius:4px; overflow:hidden; }}
+  .bar {{ height:100%; border-radius:4px; transition:width .4s; }}
+  .sig {{ font-size:12px; color:#9aa0aa; margin-top:8px; }}
+  .disc {{ margin-top:22px; padding:12px 14px; background:#241f12; border-radius:12px;
+           font-size:11px; color:#c8a45a; line-height:1.6; }}
+  .legend {{ font-size:11px; color:#8a8f98; margin:4px 2px 0; }}
+</style></head><body>
+  <header>
+    <h1>📈 台股 AI 盤中監控</h1>
+    <div class="meta">更新 {ts}（台北）　狀態：{status}　每 5 分鐘自動刷新</div>
+    <div class="legend">🔴≥60% 偏多　▪️中性　🟢≤40% 偏弱（依收紅機率排序）</div>
+  </header>
+  {cards}
+  <div class="disc">⚠️「隔日收紅機率」為技術面統計模型估計，<b>非投資建議、非保證</b>。
+  請對照「回測命中」判讀可靠度——越接近 50% 代表幾乎等於丟銅板。投資有風險，請自負盈虧。</div>
+</body></html>"""
+    os.makedirs(PUBLIC_DIR, exist_ok=True)
+    with open(PUBLIC_PATH, "w", encoding="utf-8") as f:
         f.write(html)
 
 

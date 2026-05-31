@@ -6,6 +6,12 @@ on:
     - cron: '0 1-5 * * 1-5'
   workflow_dispatch:   # 允許手動觸發測試
 
+# GitHub Pages 部署所需權限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 # 避免同一時間重複執行
 concurrency:
   group: stock-monitor
@@ -38,3 +44,32 @@ jobs:
           else
             python hourly_monitor.py
           fi
+
+      - name: 確保儀表板存在（非盤中跳過時給預設頁）
+        run: |
+          mkdir -p public
+          if [ ! -f public/index.html ]; then
+            echo '<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">' > public/index.html
+            echo '<meta http-equiv="refresh" content="600"><title>台股AI監控</title></head>' >> public/index.html
+            echo '<body style="font-family:sans-serif;padding:40px;text-align:center;color:#666">' >> public/index.html
+            echo '目前非交易時段，盤中（台北週一~五 09:00-13:30）每小時自動更新。</body></html>' >> public/index.html
+          fi
+
+      - name: 設定 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上傳儀表板
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: monitor
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 發佈到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

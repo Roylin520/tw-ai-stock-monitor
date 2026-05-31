@@ -1,0 +1,9 @@
+# 金鑰絕對不要上傳
+secret_config.py
+
+# 輸出與快取
+output/cache/
+output/*.html
+output/*.csv
+__pycache__/
+*.pyc

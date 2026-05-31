@@ -1,0 +1,40 @@
+name: 台股AI盤中監控
+
+on:
+  schedule:
+    # cron 為 UTC 時間。台北 09:00-13:00 = UTC 01:00-05:00，週一至週五整點
+    - cron: '0 1-5 * * 1-5'
+  workflow_dispatch:   # 允許手動觸發測試
+
+# 避免同一時間重複執行
+concurrency:
+  group: stock-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+
+      - name: 執行監控（手動觸發時強制執行、忽略交易時段）
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python hourly_monitor.py --force
+          else
+            python hourly_monitor.py
+          fi

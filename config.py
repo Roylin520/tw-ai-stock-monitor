@@ -2,13 +2,18 @@
 """
 台股 AI 產業分析系統 - 設定檔
 集中管理股票清單、分析參數與輸出設定。
+
+追蹤清單可由 Telegram 指令（/add /remove）動態修改，存於 watchlist.json；
+若該檔不存在則使用下方 DEFAULT_STOCKS 預設清單。
 """
+import os
+import json
 
 # ─────────────────────────────────────────────
-# AI 產業相關標的（代號 : 中文名稱）
+# AI 產業相關標的預設清單（代號 : 中文名稱）
 # yfinance 上市股票後綴為 .TW，上櫃為 .TWO
 # ─────────────────────────────────────────────
-STOCKS = {
+DEFAULT_STOCKS = {
     # 半導體 / 晶圓代工
     "2330.TW": "台積電",
     "2303.TW": "聯電",
@@ -28,10 +33,35 @@ STOCKS = {
     "0050.TW": "元大台灣50",
     "0056.TW": "元大高股息",
     "006208.TW": "富邦台50",
-    "00尚": None,  # 佔位（可自行增刪）
 }
-# 移除無效佔位
-STOCKS = {k: v for k, v in STOCKS.items() if v is not None}
+
+# 追蹤清單檔（由 command_bot.py 維護）
+WATCHLIST_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "watchlist.json")
+
+
+def load_watchlist():
+    """讀取 watchlist.json，回傳完整 dict（含 last_update_id 與 stocks）。
+    檔案不存在時以預設清單初始化。"""
+    if os.path.exists(WATCHLIST_FILE):
+        try:
+            with open(WATCHLIST_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data.get("stocks"), dict) and data["stocks"]:
+                return {"last_update_id": data.get("last_update_id", 0),
+                        "stocks": data["stocks"]}
+        except Exception:
+            pass
+    return {"last_update_id": 0, "stocks": dict(DEFAULT_STOCKS)}
+
+
+def save_watchlist(data):
+    """寫回 watchlist.json。"""
+    with open(WATCHLIST_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+# 目前生效的追蹤清單（其他模組 import config.STOCKS 即可）
+STOCKS = load_watchlist()["stocks"]
 
 # 大盤指標（用於比較相對強弱）
 BENCHMARK = "^TWII"  # 台股加權指數

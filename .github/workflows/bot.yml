@@ -1,0 +1,49 @@
+name: Telegram指令處理
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # 每 15 分鐘檢查一次指令
+  workflow_dispatch:
+
+# 允許把 watchlist.json 變更推回 repo
+permissions:
+  contents: write
+
+concurrency:
+  group: stock-bot
+  cancel-in-progress: false
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 取出程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 安裝套件
+        run: pip install -r requirements.txt
+
+      - name: 處理 Telegram 指令
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        run: python command_bot.py
+
+      - name: 若清單有變更則推回 repo
+        run: |
+          if ! git diff --quiet watchlist.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add watchlist.json
+            git commit -m "更新追蹤清單（Telegram 指令）"
+            git push
+            echo "已推回 watchlist.json"
+          else
+            echo "清單無變更"
+          fi
